@@ -196,19 +196,19 @@ std::unique_ptr<ApngImage> ApngDecoder::decode(
     result = ERR_INVALID_FILE_FORMAT;
     return nullptr;
   }
-  size_t size = height * row_bytes;
-  std::unique_ptr<uint8_t[]> p_frame(new uint8_t[size]());
-  std::unique_ptr<uint8_t[]> p_buffer(new uint8_t[size]());
-  std::unique_ptr<uint8_t[]> p_previous_frame(new uint8_t[size]());
+  size_t buffer_size = height * row_bytes;
+  size_t frame_size = width * height;
+  std::unique_ptr<uint8_t[]> p_frame(new uint8_t[buffer_size]());
+  std::unique_ptr<uint8_t[]> p_buffer(new uint8_t[buffer_size]());
+  std::unique_ptr<uint8_t[]> p_previous_frame(new uint8_t[buffer_size]());
   // Check unsigned integer wrapping
   if (height > SIZE_MAX / sizeof(png_bytep)) {
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
     result = ERR_INVALID_FILE_FORMAT;
     return nullptr;
   }
-  size_t row_ptr_array_size = height * sizeof(png_bytep);
-  std::unique_ptr<png_bytep[]> rows_frame(new png_bytep[row_ptr_array_size]);
-  std::unique_ptr<png_bytep[]> rows_buffer(new png_bytep[row_ptr_array_size]);
+  std::unique_ptr<png_bytep[]> rows_frame(new png_bytep[height]);
+  std::unique_ptr<png_bytep[]> rows_buffer(new png_bytep[height]);
   if (!p_frame || !p_buffer || !p_previous_frame || !rows_frame || !rows_buffer) {
     LOGV(" | failed to allocate buffers");
     png_destroy_read_struct(&png_ptr, &info_ptr, nullptr);
@@ -282,7 +282,7 @@ std::unique_ptr<ApngImage> ApngDecoder::decode(
                             &blend_op);
     auto duration =
         static_cast<size_t>(std::lround(static_cast<float>(delay_num) / delay_den * 1000.F));
-    std::unique_ptr<ApngFrame> frame(new ApngFrame(size, duration));
+    std::unique_ptr<ApngFrame> frame(new ApngFrame(frame_size, duration));
     if (i == first) {
       blend_op = PNG_BLEND_OP_SOURCE;
       if (dispose_op == PNG_DISPOSE_OP_PREVIOUS) {
@@ -295,7 +295,7 @@ std::unique_ptr<ApngImage> ApngDecoder::decode(
 
     // Process dispose operation
     if (dispose_op == PNG_DISPOSE_OP_PREVIOUS) {
-      memcpy(p_previous_frame.get(), p_frame.get(), size);
+      memcpy(p_previous_frame.get(), p_frame.get(), buffer_size);
     }
 
     // Process blend operation
@@ -318,7 +318,7 @@ std::unique_ptr<ApngImage> ApngDecoder::decode(
 
     // Process dispose operation after decode frame
     if (dispose_op == PNG_DISPOSE_OP_PREVIOUS) {
-      memcpy(p_frame.get(), p_previous_frame.get(), size);
+      memcpy(p_frame.get(), p_previous_frame.get(), buffer_size);
     } else if (dispose_op == PNG_DISPOSE_OP_BACKGROUND) {
       for (uint32_t j = 0; j < frame_height; j++) {
         memset(rows_frame[j + y_offset] + x_offset * CHANNEL_4_BYTE_SIZE,
